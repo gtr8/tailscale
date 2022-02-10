@@ -1157,6 +1157,10 @@ type MapResponse struct {
 	// sees.
 	Health []string `json:",omitempty"`
 
+	// SSHPolicy, if non-nil, updates the SSH policy for how incoming
+	// SSH connections should be handled.
+	SSHPolicy *SSHPolicy
+
 	// Debug is normally nil, except for when the control server
 	// is setting debug settings on a node.
 	Debug *Debug `json:",omitempty"`
@@ -1368,4 +1372,60 @@ type SetDNSRequest struct {
 
 	// Value is the value to add.
 	Value string
+}
+
+// SSHPolicy is the policy for how to handle incoming SSH connections
+// over Tailscale.
+type SSHPolicy struct {
+	// Rules are the rules to process for an incoming SSH
+	// connection. The first matching rule takes its action and
+	// stops processing further rules.
+	Rules []*SSHRule
+}
+
+// An SSH rule is a match predicate and associated action for an incoming SSH connection.
+type SSHRule struct {
+	// Principal matches an incoming connection. If the connection
+	// matches anything in this list and also matches SSHUser,
+	// then Action is applied.
+	Principal []*SSHPrincipal `json:"principal"`
+
+	// SSHUser are the SSH users that this rule matches.
+	// It is a map from either ssh-user|"*" => local-user.
+	// The map must contain a key for either ssh-user or "*" to
+	// match. If it does, the map entry's value is the actual
+	// user that's logged in.
+	SSHUser map[string]string `json:"sshUser"`
+
+	// Action is the outcome to task.
+	// A nil or invalid action means to deny.
+	Action *SSHAction `json:"action"`
+}
+
+// SSHPrincipal is either a particular node or a user on any node.
+// At most one field should be non-zero specified.
+type SSHPrincipal struct {
+	Node StableNodeID `json:"node,omitempty"`
+	User UserID       `json:"user,omitempty"`
+}
+
+// SSHAction is how to handle an incoming connection.
+// At most one field should be non-zero.
+type SSHAction struct {
+	// Message, if non-empty, is shown to the user before the
+	// action occurs.
+	Message string
+
+	// Deny, if true, denies the connection.
+	Deny bool `json:"deny,omitempty"`
+
+	// Accept, if true, accepts the connection immediately
+	// without further prompts.
+	Accept bool `json:"accept,omitempty"`
+
+	// Block, if true, is a URL that serves an outcome verdict.
+	// The connection will be accepted and will block until the
+	// provided long-polling URL serves a new SSHAction JSON
+	// value.
+	Block string `json:"block,omitempty"`
 }
